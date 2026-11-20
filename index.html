@@ -1,1 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TNPSC Study Notes</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #FAF7F2; color: #1B2A4A; max-width: 820px; margin: 0 auto; padding: 24px 16px; }
+    header { border-bottom: 2px solid #1B2A4A; padding-bottom: 16px; margin-bottom: 24px; }
+    .eyebrow { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: #8B2635; font-weight: bold; }
+    h1 { margin: 4px 0 8px; font-size: 28px; }
+    .back-btn { display: none; background: #1B2A4A; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; margin-bottom: 16px; font-size: 14px; }
+    #search { width: 100%; padding: 12px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 16px; margin-bottom: 20px; box-sizing: border-box; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .card { background: white; border: 1px solid #E2E8F0; border-left: 4px solid #1B2A4A; padding: 18px; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .note-row { background: white; border: 1px solid #E2E8F0; padding: 16px; border-radius: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .btns a { text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; font-weight: 600; display: inline-block; margin-left: 6px; }
+    .view { background: #D4AF37; color: #1B2A4A; }
+    .download { background: #8B2635; color: white; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="eyebrow">Government Exam Preparation</div>
+    <h1 id="pageTitle">TNPSC Study Notes</h1>
+    <p id="pageSub">Select a subject folder below to view and download study PDFs.</p>
+  </header>
+
+  <button id="backBtn" class="back-btn" onclick="loadSubjects()">← All Subjects</button>
+  <input type="text" id="search" placeholder="Search subjects or notes..." onkeyup="filterItems()">
+  <div id="content" class="grid">Loading subjects...</div>
+
+  <script>
+    const API_KEY = "PASTE_YOUR_API_KEY_HERE";
+    const ROOT_FOLDER_ID = "1-KZ6wcVNDu7BuhXpy0EemEDGECMb-IJ1";
+    let currentItems = [];
+    let isViewingFiles = false;
+
+    async function loadSubjects() {
+      isViewingFiles = false;
+      document.getElementById("backBtn").style.display = "none";
+      document.getElementById("pageTitle").textContent = "TNPSC Study Notes";
+      document.getElementById("pageSub").textContent = "Select a subject folder below to view and download study PDFs.";
+      document.getElementById("search").value = "";
+      const box = document.getElementById("content");
+      box.className = "grid";
+      box.innerHTML = "Loading subjects...";
+
+      const q = encodeURIComponent(`'${ROOT_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+      try {
+        const res = await fetch(`https://googleapis.com{q}&fields=files(id,name)&orderBy=name&key=${API_KEY}`);
+        const data = await res.json();
+        if (data.error) { box.innerHTML = "Google Error: " + data.error.message; return; }
+        currentItems = data.files || [];
+        renderSubjects(currentItems);
+      } catch (e) {
+        box.innerHTML = "Connection error: " + e.message;
+      }
+    }
+
+    function renderSubjects(folders) {
+      const box = document.getElementById("content");
+      if (!folders.length) {
+        box.innerHTML = "<p>No subject folders found. Create subfolders (like History, Polity, Tamil) inside your Google Drive folder!</p>";
+        return;
+      }
+      box.innerHTML = folders.map(f => `
+        <div class="card" onclick="loadFiles('${f.id}', '${f.name.replace(/'/g, "\\'")}')">
+          <strong>${f.name}</strong>
+          <div style="font-size:13px; color:#64748B; margin-top:6px;">Tap to open notes →</div>
+        </div>
+      `).join("");
+    }
+
+    async function loadFiles(folderId, folderName) {
+      isViewingFiles = true;
+      document.getElementById("backBtn").style.display = "inline-block";
+      document.getElementById("pageTitle").textContent = folderName;
+      document.getElementById("pageSub").textContent = "Available study PDFs in " + folderName;
+      document.getElementById("search").value = "";
+      const box = document.getElementById("content");
+      box.className = "";
+      box.innerHTML = "Loading PDFs...";
+
+      const q = encodeURIComponent(`'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`);
+      try {
+        const res = await fetch(`https://googleapis.com{q}&fields=files(id,name,webViewLink,webContentLink)&orderBy=createdTime desc&key=${API_KEY}`);
+        const data = await res.json();
+        currentItems = data.files || [];
+        renderFiles(currentItems);
+      } catch (e) {
+        box.innerHTML = "Connection error: " + e.message;
+      }
+    }
+
+    function renderFiles(files) {
+      const box = document.getElementById("content");
+      if (!files.length) { box.innerHTML = "<p>No PDFs uploaded in this folder yet.</p>"; return; }
+      box.innerHTML = files.map(file => `
+        <div class="note-row">
+          <strong>${file.name}</strong>
+          <div class="btns">
+            <a class="view" href="${file.webViewLink}" target="_blank">View</a>
+            <a class="download" href="${file.webContentLink || 'https://google.com' + file.id}" target="_blank">Download</a>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function filterItems() {
+      const term = document.getElementById("search").value.toLowerCase();
+      const filtered = currentItems.filter(item => item.name.toLowerCase().includes(term));
+      isViewingFiles ? renderFiles(filtered) : renderSubjects(filtered);
+    }
+
+    loadSubjects();
+  </script>
+</body>
+</html>
 
